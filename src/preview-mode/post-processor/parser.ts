@@ -23,13 +23,15 @@ export class PreviewModeParser {
 	private _stack: InlineFormat[] = [];
 	private _queue: Partial<Record<InlineFormat, Range>> = {}
 	private _parsingQueue: PreviewModeParser[];
+	private _escapedElements: WeakSet<Element>;
 
-	constructor(root: Element, parsingQueue: PreviewModeParser[]) {
+	constructor(root: Element, parsingQueue: PreviewModeParser[], escapedElements = new WeakSet<Element>()) {
 		this.root = root;
 		this._walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
 		this._walker.nextNode();
 		this._curNode = this._walker.currentNode;
 		this._parsingQueue = parsingQueue;
+		this._escapedElements = escapedElements;
 	}
 
 	public streamParse(): void {
@@ -38,11 +40,14 @@ export class PreviewModeParser {
 				this._offset = 0;
 				this._parseTextNode();
 			} else if (this._curNode instanceof Element) {
+				// An escaped punctuation character is literal content, not a
+				// formatting boundary (e.g. the middle caret in ^a\\^b^).
+				if (this._escapedElements.has(this._curNode)) continue;
 				if (this._isSkipped(this._curNode)) {
 					this._resolve(Format.SUPERSCRIPT);
 					this._resolve(Format.SUBSCRIPT);
 				} else if (this._curNode.textContent) {
-					this._parsingQueue.push(new PreviewModeParser(this._curNode, this._parsingQueue));
+					this._parsingQueue.push(new PreviewModeParser(this._curNode, this._parsingQueue, this._escapedElements));
 					if (/\s/.test(this._curNode.textContent)) {
 						this._resolve(Format.SUPERSCRIPT);
 						this._resolve(Format.SUBSCRIPT);

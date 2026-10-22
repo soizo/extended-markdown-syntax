@@ -44,6 +44,6 @@ export const DEFAULT_SETTINGS: PluginSettings = {
 	get predefinedDivTag() { return [{ name: "", tag: "", showInMenu: true }] },
 
 	// Others
-	editorEscape: false,
+	editorEscape: true,
 	decoratePDF: true,
 }

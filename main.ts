@@ -12,7 +12,7 @@ import { ReadingModeSyntaxExtender } from "src/preview-mode/post-processor/core"
 import { editorSyntaxExtender, refreshCall } from "src/editor-mode/cm-extensions";
 
 export default class ExtendedMarkdownSyntax extends Plugin {
-	settings: PluginSettings;
+	declare settings: PluginSettings;
 	opacityHandler: StyleSheetHandler;
 	tagManager: TagManager;
 

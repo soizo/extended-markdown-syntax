@@ -408,7 +408,7 @@ export const settingTabConfigs = (settings: PluginSettings): SettingRoot<PluginS
 		collapsible: true,
 		items: [{
 			name: "Delimiter escaping",
-			desc: "Use backslash as a delimiter escaper. Works only in the editor mode.",
+			desc: "Use backslash as a delimiter escaper in the editor (enabled by default). Reading mode always respects escapes when the Markdown source is available.",
 			fields: [{
 				type: Field.TOGGLE,
 				record: settings,

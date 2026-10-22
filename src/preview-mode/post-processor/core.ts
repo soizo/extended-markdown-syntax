@@ -3,6 +3,7 @@ import { MarkdownViewMode, Format } from "src/enums";
 import { PluginSettings } from "src/types";
 import { InlineRules, BlockRules } from "src/format-configs/rules";
 import { PreviewModeParser } from "src/preview-mode/post-processor/parser";
+import { protectEscapedDelimiters } from "src/preview-mode/post-processor/escapes";
 import { CUSTOM_SPAN_TAG_RE, COLOR_TAG_RE, FENCED_DIV_RE } from "src/preview-mode/post-processor/configs";
 
 function _trimTag(tagStr: string): string {
@@ -81,20 +82,22 @@ function _drawFencedDiv(settings: PluginSettings, targetEl: HTMLElement): void {
 export class ReadingModeSyntaxExtender {
 	private readonly _SELECTOR_QUERY = "p, h1, h2, h3, h4, h5, h6, td, th, li:not(:has(p)), .callout-title-inner" as const;
 	private readonly _settings: PluginSettings;
+	private _sourceText: string | null = null;
+	private _sourceLines: string[] = [];
 
 	constructor(settings: PluginSettings) {
 		this._settings = settings;
 		this.postProcess.sortOrder = 0;
 	}
 
-	private _parseInline(targetEl: HTMLElement, capsulated = true): void {
+	private _parseInline(targetEl: HTMLElement, capsulated = true, escapedElements?: WeakSet<Element>): void {
 		let targetedEls = _isTableCellWrapper(targetEl) || !capsulated && _isLeafBlock(targetEl)
 				? [targetEl]
 				: targetEl.querySelectorAll<HTMLElement>(this._SELECTOR_QUERY),
 			parsingQueue: PreviewModeParser[] = [];
 
 		for (let i = 0; i < targetedEls.length; i++) {
-			new PreviewModeParser(targetedEls[i], parsingQueue).streamParse();
+			new PreviewModeParser(targetedEls[i], parsingQueue, escapedElements).streamParse();
 			for (let i = 0; i < parsingQueue.length; i++) {
 				parsingQueue[i].streamParse();
 				if (i >= 100) { throw Error(`${parsingQueue}`) }
@@ -118,22 +121,33 @@ export class ReadingModeSyntaxExtender {
 		return false;
 	}
 
-	private _draw(sectionEl: HTMLElement, capsulated = true): void {
+	private _draw(sectionEl: HTMLElement, capsulated: boolean, ctx: MarkdownPostProcessorContext): void {
 		if (!this._isTargeted(sectionEl, capsulated)) return;
 
-		if (this._settings.customHighlight & MarkdownViewMode.PREVIEW_MODE)
-			_drawCustomHighlight(this._settings, sectionEl);
-
-		if (this._settings.fencedDiv & MarkdownViewMode.PREVIEW_MODE) {
-			let targetEl = capsulated ? sectionEl.firstElementChild : sectionEl;
-			if (targetEl instanceof HTMLParagraphElement)
-				_drawFencedDiv(this._settings, targetEl);
+		const info = ctx.getSectionInfo(sectionEl);
+		if (info && info.text !== this._sourceText) {
+			this._sourceText = info.text;
+			this._sourceLines = info.text.split("\n");
 		}
+		const source = info ? this._sourceLines.slice(info.lineStart, info.lineEnd + 1).join("\n") : undefined;
+		const protection = source === undefined ? undefined : protectEscapedDelimiters(sectionEl, source);
+		try {
+			if (this._settings.customHighlight & MarkdownViewMode.PREVIEW_MODE)
+				_drawCustomHighlight(this._settings, sectionEl);
 
-		this._parseInline(sectionEl, capsulated);
+			if (this._settings.fencedDiv & MarkdownViewMode.PREVIEW_MODE) {
+				let targetEl = capsulated ? sectionEl.firstElementChild : sectionEl;
+				if (targetEl instanceof HTMLParagraphElement)
+					_drawFencedDiv(this._settings, targetEl);
+			}
 
-		if (this._settings.customSpan & MarkdownViewMode.PREVIEW_MODE)
-			_drawCustomSpan(this._settings, sectionEl);
+			this._parseInline(sectionEl, capsulated, protection?.elements);
+
+			if (this._settings.customSpan & MarkdownViewMode.PREVIEW_MODE)
+				_drawCustomSpan(this._settings, sectionEl);
+		} finally {
+			protection?.restore();
+		}
 	}
 
 	public postProcess: MarkdownPostProcessor = (containerOrSection: HTMLElement, ctx: MarkdownPostProcessorContext) => {
@@ -145,10 +159,10 @@ export class ReadingModeSyntaxExtender {
 			if (!this._settings.decoratePDF) return;
 			let sectionEls = containerOrSection.querySelectorAll<HTMLElement>(capsulated ? "&>div" : "&>*");
 			for (let i = 0; i < sectionEls.length; i++) {
-				this._draw(sectionEls[i], capsulated);
+				this._draw(sectionEls[i], capsulated, ctx);
 			}
 		} else {
-			this._draw(containerOrSection, true);
+			this._draw(containerOrSection, true, ctx);
 		}
 	}
 }
