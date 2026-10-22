@@ -6,13 +6,17 @@ import { EditorParser } from "src/editor-mode/preprocessor/parser";
 import { Text } from "@codemirror/state";
 import { TokenStatus } from "src/enums";
 import { checkSpoilerStyles } from "./spoiler-styles";
+import type { MarkdownView, WorkspaceLeaf } from "obsidian";
 
 /** Run only against detached fixture DOM. Never edit a vault or install a plugin. */
 export function run(styles: string) {
 	// This private seam is test-only: use Obsidian's actual Markdown parser but
 	// supply our own receiver and source, not the open note's text or renderer.
-	const renderer = app.workspace.getLeavesOfType("markdown")[0]?.view?.previewMode?.renderer;
-	if (typeof renderer?.parseSync != "function")
+	const views: MarkdownView[] = app.workspace.getLeavesOfType("markdown")
+		.map((leaf: WorkspaceLeaf) => leaf.view as MarkdownView);
+	const view = views.find(view => view.editor?.cm && typeof view.previewMode?.renderer?.parseSync == "function");
+	const renderer = view?.previewMode?.renderer;
+	if (!view || typeof renderer?.parseSync != "function")
 		throw Error("Open a Markdown note in Obsidian before running this smoke test.");
 	const settings = { ...DEFAULT_SETTINGS };
 	configureDelimLookup(settings);
@@ -74,7 +78,7 @@ export function run(styles: string) {
 			throw Error(`Fixture ${JSON.stringify(source)}: expected ${count} ${selector} (${content ?? text ?? ""}), got ${root.innerHTML}`);
 		return source;
 	});
-	const cm = app.workspace.getLeavesOfType("markdown").map(leaf => leaf.view.editor?.cm).find(Boolean);
+	const cm = view.editor.cm;
 	const context = cm?.state.values.find(value => value?.context?.parser)?.context;
 	if (!context) throw Error("Open a Markdown editor before running native editor checks.");
 	for (const { source, format, count, validTag } of editorFixtures) {

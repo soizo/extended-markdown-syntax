@@ -68,7 +68,7 @@ mark {
 	color: rgb(var(--color-red-rgb));
 }
 
-.cm-spoiler {
+.cm-spoiler, span.spoiler {
 	border-radius: 2px;
 	transition-duration: 0.1s;
 	transition-property: color;
@@ -78,26 +78,18 @@ mark {
 	.theme-light & {
 		background-color: var(--color-base-40);
 	}
-	.is-live-preview &:not(:is(:hover), :has(.cm-spoiler-revealed), .cm-delim) {
-		color: transparent;
+	& * {
+		transition: inherit;
 	}
 }
 
-span.spoiler {
-	border-radius: 2px;
-	transition-duration: 0.1s;
-	transition-property: color;
-	.theme-dark & {
-		background-color: var(--color-base-25);
+.is-live-preview .cm-spoiler:not(:hover, :has(.cm-spoiler-revealed), .cm-delim),
+span.spoiler:not(.spoiler-revealed) {
+	&, & * {
+		color: transparent !important;
 	}
-	.theme-light & {
-		background-color: var(--color-base-40);
-	}
-	&:not(.spoiler-revealed) {
-		color: transparent;
-		& * {
-			visibility: hidden;
-		}
+	& :is(a, .cm-hmd-internal-link, .cm-underline) {
+		pointer-events: none;
 	}
 }
 
