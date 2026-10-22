@@ -1,11 +1,12 @@
 import { ReadingModeSyntaxExtender } from "src/preview-mode/post-processor/core";
 import { configureDelimLookup } from "src/format-configs/format-utils";
 import { DEFAULT_SETTINGS } from "src/settings/configs";
-import { syntaxFixtures, editorFixtures, type SyntaxFixture } from "./syntax-fixtures";
+import { syntaxFixtures, editorFixtures, fencedDivSample, type SyntaxFixture } from "./syntax-fixtures";
 import { EditorParser } from "src/editor-mode/preprocessor/parser";
 import { Text } from "@codemirror/state";
 import { TokenStatus } from "src/enums";
 import { checkSpoilerStyles } from "./spoiler-styles";
+import { checkFencedDivs } from "./fenced-div";
 import type { MarkdownView, WorkspaceLeaf } from "obsidian";
 
 /** Run only against detached fixture DOM. Never edit a vault or install a plugin. */
@@ -23,6 +24,8 @@ export function run(styles: string) {
 	const extender = new ReadingModeSyntaxExtender(settings);
 	const fixtures: SyntaxFixture[] = [
 		...syntaxFixtures,
+		// Multi-paragraph blocks need Obsidian's real section boundaries.
+		{ source: fencedDivSample, selector: ".fenced-div.r1", count: 3 },
 		{ source: String.raw`\^w\^`, selector: "sup", count: 0 },
 		{ source: String.raw`\^w\^ ^yes^`, selector: "sup", count: 1, content: "yes" },
 		{ source: String.raw`\~w\~ ~yes~`, selector: "sub", count: 1, content: "yes" },
@@ -81,17 +84,23 @@ export function run(styles: string) {
 	const cm = view.editor.cm;
 	const context = cm?.state.values.find(value => value?.context?.parser)?.context;
 	if (!context) throw Error("Open a Markdown editor before running native editor checks.");
-	for (const { source, format, count, validTag } of editorFixtures) {
+	const parseEditor = (source: string) => {
 		// New native state/context, not a transaction on any open note.
 		const state = cm.state.constructor.create({ doc: source });
-		const isolated = context.constructor.create(context.parser, state, { from: 0, to: source.length });
-		const tree = isolated.withContext(() => context.parser.parse(source));
+		const normalized = state.doc.toString();
+		const isolated = context.constructor.create(context.parser, state, { from: 0, to: normalized.length });
+		const tree = isolated.withContext(() => context.parser.parse(normalized));
 		const parser = new EditorParser(settings);
-		parser.initParse(Text.of(source.split("\n")), tree);
+		parser.initParse(Text.of(normalized.split("\n")), tree);
+		return { state, tree, parser };
+	};
+	for (const { source, format, count, validTag } of editorFixtures) {
+		const { parser } = parseEditor(source);
 		const tokens = [...parser.inlineTokens, ...parser.blockTokens]
 			.filter(token => token.type == format && token.status == TokenStatus.ACTIVE);
 		if (tokens.length != count || validTag !== undefined && tokens.some(token => token.validTag != validTag))
 			throw Error(`Editor fixture ${JSON.stringify(source)}: expected ${count} active tokens, got ${JSON.stringify(tokens)}`);
 	}
-	return { passed: true, checks: checks.length, editorChecks: editorFixtures.length, spoilerChecks: checkSpoilerStyles(styles, render) };
+	return { passed: true, checks: checks.length, editorChecks: editorFixtures.length,
+		spoilerChecks: checkSpoilerStyles(styles, render), fencedDivChecks: checkFencedDivs(cm, parseEditor) };
 }

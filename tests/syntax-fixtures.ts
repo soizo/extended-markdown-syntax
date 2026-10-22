@@ -57,6 +57,10 @@ syntaxFixtures.push(
 	{ source: String.raw`\\:::my-class` + "\nbody", selector: ".fenced-div", count: 0, html: "<p>\\:::my-class<br>\nbody</p>" },
 );
 
+// #23: extra blank lines must not leave later styled blocks half-formatted.
+export const fencedDivBlock = "::: r1\nFirst\nSecond";
+export const fencedDivSample = "Styled blocks below:\n\n" + Array(3).fill(fencedDivBlock).join("\n\n\n");
+
 export interface EditorFixture {
 	source: string;
 	format: Format;

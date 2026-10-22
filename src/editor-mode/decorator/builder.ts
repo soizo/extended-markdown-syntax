@@ -2,16 +2,16 @@ import { ChangeDesc, ChangeSet, EditorState, Range, RangeSet, RangeValue, Text, 
 import { Decoration, DecorationSet, EditorView, ViewUpdate } from "@codemirror/view";
 import { editorLivePreviewField } from "obsidian";
 import { DisplayBehaviour, Format, MarkdownViewMode, TokenLevel, TokenStatus } from "src/enums";
-import { BlockFormat, PlainRange, InlineFormat, TokenGroup, TokenDecoration, PluginSettings, Token } from "src/types";
-import { BlockRules, InlineRules } from "src/format-configs/rules";
+import { PlainRange, InlineFormat, TokenGroup, TokenDecoration, PluginSettings, Token } from "src/types";
+import { InlineRules } from "src/format-configs/rules";
 import { trimTag } from "src/format-configs/format-utils";
 import { EditorParser } from "src/editor-mode/preprocessor/parser";
 import { SelectionObserver } from "src/editor-mode/preprocessor/observer";
 import { ActivityRecord } from "src/editor-mode/cm-extensions";
-import { LineBreak, HiddenWidget, ColorButton } from "src/editor-mode/decorator/widgets";
+import { HiddenWidget, ColorButton } from "src/editor-mode/decorator/widgets";
 import { REVEALED_SPOILER_DECO } from "src/editor-mode/decorator/decorations";
-import { getTagRange, iterTokenGroup, provideTokenPartsRanges } from "src/editor-mode/utils/token-utils"
-import { TextCursor } from "src/editor-mode/utils/doc-utils";
+import { getTagRange, iterTokenGroup } from "src/editor-mode/utils/token-utils"
+import { createBlockLineBreaks, createBlockDecorations } from "src/editor-mode/decorator/fenced-div";
 
 interface RangeSetUpdate<T extends RangeValue> {
 	add?: readonly Range<T>[];
@@ -125,7 +125,7 @@ class _LineBreakReplacer {
 		let reparsedRange = this.parser.reparsedRanges[TokenLevel.BLOCK],
 			blockTokens = this.parser.blockTokens,
 			updateSpec: RangeSetUpdate<Decoration> = {
-				add: this._produceWidgetRanges(doc)
+				add: createBlockLineBreaks(doc, this._getReparsedBlockTokens())
 			};
 		
 		if (!blockTokens.length)
@@ -144,34 +144,6 @@ class _LineBreakReplacer {
 	private _getReparsedBlockTokens(): TokenGroup {
 		let range = this.parser.reparsedRanges[TokenLevel.BLOCK];
 		return this.parser.blockTokens.slice(range.from, range.changedTo);
-	}
-
-	private _produceWidgetRanges(doc: Text): Range<Decoration>[] {
-		let tokens = this._getReparsedBlockTokens(),
-			ranges: Range<Decoration>[] = [];
-		if (!tokens.length) { return ranges }
-
-		let tokenIndex = 0,
-			textCursor = TextCursor.atOffset(doc, tokens[0].from);
-
-		do {
-			let curToken = tokens[tokenIndex],
-				{ curLine } = textCursor;
-			if (!curToken) break;
-			if (curToken.status != TokenStatus.ACTIVE) { tokenIndex++; continue }
-			if (
-				curLine.from == curToken.from ||
-				curLine.from - 1 == curToken.from + curToken.openLen + curToken.tagLen
-			) continue;
-			if (
-				curLine.from >= curToken.to ||
-				curLine.to < curToken.from ||
-				curLine.to == curToken.to && curToken.closedByBlankLine
-			) { tokenIndex++; continue }
-			ranges.push(LineBreak.of(curLine.from));
-		} while (textCursor.next());
-
-		return ranges;
 	}
 }
 
@@ -228,7 +200,7 @@ export class DecorationBuilder {
 			);
 		if (!visibleRanges.length) visibleRanges = [{ from: 0, to: 0 }];
 		this._buildInline(visibleRanges, visibleText);
-		this._buildBlock(visibleRanges, visibleText, noStyledFencedDiv);
+		this._buildBlock(visibleRanges, state.doc, noStyledFencedDiv);
 	}
 
 	/**
@@ -342,40 +314,8 @@ export class DecorationBuilder {
 		return this.holder.inlineSet = Decoration.set(inlineDecoRanges);
 	}
 
-	private _buildBlock(visibleRanges: readonly PlainRange[], visibleText: string, noStyle: boolean): DecorationSet {
-		let lineDecoRanges: Range<TokenDecoration>[] = [],
-			viewportStart = visibleRanges[0].from;
-
-		iterTokenGroup({
-			tokens: this._parser.blockTokens,
-			ranges: visibleRanges,
-			callback: token => {
-				if (token.status != TokenStatus.ACTIVE) return;
-	
-				let baseCls = "cm-" + BlockRules[token.type as BlockFormat].class,
-					{ contentRange, tagRange } = provideTokenPartsRanges(token),
-					tagStr = trimTag(visibleText.slice(tagRange.from - viewportStart, tagRange.to - viewportStart)),
-					openDelimCls = baseCls + " cm-fenced-div-start",
-					contentCls = baseCls + (noStyle ? "" : " " + tagStr),
-					hasContent = !!visibleText
-						.slice(contentRange.from - viewportStart, contentRange.to - viewportStart)
-						.trimEnd();
-
-				lineDecoRanges.push(
-					(Decoration.line({ class: openDelimCls, token }) as TokenDecoration)
-						.range(token.from)
-				);
-
-				if (hasContent) {
-					lineDecoRanges.push(
-						(Decoration.line({ class: contentCls, token }) as TokenDecoration)
-							.range(contentRange.from + 1)
-					);
-				}
-			}
-		});
-
-		return this.holder.blockSet = Decoration.set(lineDecoRanges);
+	private _buildBlock(visibleRanges: readonly PlainRange[], doc: Text, noStyle: boolean): DecorationSet {
+		return this.holder.blockSet = Decoration.set(createBlockDecorations(doc, this._parser.blockTokens, visibleRanges, noStyle));
 	}
 
 	private _createColorBtnWidgets(hlTokens: TokenGroup): DecorationSet {

@@ -72,24 +72,4 @@ export class HiddenWidget extends WidgetType {
 	}
 }
 
-export class LineBreak extends WidgetType {
-	private _offset: number;
-	private constructor(offset: number) {
-		super();
-		this._offset = offset;
-	}
-
-	public eq(other: LineBreak): boolean {
-		return other._offset === this._offset;
-	}
-
-	public toDOM(): HTMLElement {
-		return document.createElement("br");
-	}
-
-	public static of(offset: number): Range<Decoration> {
-		return Decoration.replace({
-			widget: new LineBreak(offset),
-		}).range(offset - 1, offset);
-	}
-}
+export { LineBreak } from "src/editor-mode/decorator/fenced-div";
