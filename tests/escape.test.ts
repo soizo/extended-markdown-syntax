@@ -8,10 +8,11 @@ import { EditorParser } from "src/editor-mode/preprocessor/parser";
 import { ReadingModeSyntaxExtender } from "src/preview-mode/post-processor/core";
 import { configureDelimLookup } from "src/format-configs/format-utils";
 import { DEFAULT_SETTINGS } from "src/settings/configs";
-import { Format, TokenStatus } from "src/enums";
+import { TokenStatus } from "src/enums";
+import { syntaxFixtures, editorFixtures, inlineFormats } from "./syntax-fixtures";
 
 const dom = new JSDOM();
-for (const name of ["document", "Node", "NodeFilter", "Text", "Element", "HTMLElement", "HTMLParagraphElement", "HTMLHeadingElement", "HTMLTableElement", "HTMLUListElement", "HTMLOListElement", "Range", "DOMParser"]) {
+for (const name of ["document", "Node", "NodeFilter", "Text", "Element", "HTMLElement", "HTMLParagraphElement", "HTMLBRElement", "HTMLHeadingElement", "HTMLTableElement", "HTMLUListElement", "HTMLOListElement", "Range", "DOMParser"]) {
 	globalThis[name] = dom.window[name];
 }
 const elementPrototype = dom.window.Element.prototype;
@@ -36,15 +37,17 @@ function preview(source: string, html = md.render(source), fullSource = source, 
 	return el;
 }
 
-const formats = [
-	{ delimiter: "^", selector: "sup", type: Format.SUPERSCRIPT },
-	{ delimiter: "~", selector: "sub", type: Format.SUBSCRIPT },
-	{ delimiter: "++", selector: "ins", type: Format.INSERTION },
-	{ delimiter: "||", selector: ".spoiler", type: Format.SPOILER },
-	{ delimiter: "!!", selector: ".custom-span", type: Format.CUSTOM_SPAN },
-];
+for (const { source, html, selector, count, content, text } of syntaxFixtures) {
+	test(`preview syntax: ${JSON.stringify(source)}`, () => {
+		const el = preview(source, html);
+		const matches = el.querySelectorAll(selector);
+		assert.equal(matches.length, count);
+		if (content !== undefined) assert.equal(matches[0]?.textContent?.trim(), content);
+		if (text !== undefined) assert.equal(el.textContent?.trim(), text);
+	});
+}
 
-for (const { delimiter: d, selector } of formats) {
+for (const [d, selector] of inlineFormats) {
 	test(`preview: escaped ${d} delimiters stay literal next to normal formatting`, () => {
 		const el = preview(`\\${d}w\\${d} ${d}yes${d}`);
 		assert.equal(el.querySelectorAll(selector).length, 1);
@@ -149,14 +152,21 @@ test("preview: ambiguous text is left literal, not guessed", () => {
 
 // Model the escape nodes emitted by Obsidian's editor syntax tree. This keeps
 // the regression at EditorParser's public boundary rather than testing a regex.
-function editor(source: string, editorEscape = settings.editorEscape): EditorParser {
+function editor(source: string, editorEscape = settings.editorEscape, escapeNodes = true): EditorParser {
 	const documentType = NodeType.define({ id: 0, name: "Document", top: true });
 	const escapeType = NodeType.define({ id: 1, name: "escape" });
+	const highlightType = NodeType.define({ id: 2, name: "formatting-highlight" });
 	const children: Tree[] = [], positions: number[] = [];
 	for (let i = 0; i < source.length; i++) {
 		if (source[i] == "\\" && i + 1 < source.length) {
+			if (escapeNodes) {
+				positions.push(i);
+				children.push(new Tree(escapeType, [], [], 2));
+			}
+			i++;
+		} else if (source.startsWith("==", i)) {
 			positions.push(i);
-			children.push(new Tree(escapeType, [], [], 2));
+			children.push(new Tree(highlightType, [], [], 2));
 			i++;
 		}
 	}
@@ -166,16 +176,30 @@ function editor(source: string, editorEscape = settings.editorEscape): EditorPar
 	return parser;
 }
 
-for (const { delimiter: d, type } of formats) {
+for (const [d, , type] of inlineFormats) {
 	test(`editor: default settings honor escaped ${d} delimiters`, () => {
 		const parser = editor(`\\${d}w\\${d} ${d}yes${d}`);
 		const active = parser.inlineTokens.filter(token => token.type == type && token.status == TokenStatus.ACTIVE);
 		assert.equal(active.length, 1);
 		assert.equal(parser.settings.editorEscape, true);
 	});
+	test(`editor: escaping ${d} does not depend on escape syntax nodes`, () => {
+		const parser = editor(`\\${d}w\\${d} ${d}yes${d}`, true, false);
+		assert.equal(parser.inlineTokens.filter(token => token.type == type && token.status == TokenStatus.ACTIVE).length, 1);
+	});
 	test(`editor: even backslashes allow ${d} formatting`, () => {
 		const parser = editor(`\\\\${d}w${d}`);
 		assert.equal(parser.inlineTokens.filter(token => token.type == type && token.status == TokenStatus.ACTIVE).length, 1);
+	});
+}
+
+for (const { source, format, count, validTag } of editorFixtures) {
+	test(`editor syntax: ${JSON.stringify(source)}`, () => {
+		const parser = editor(source);
+		const tokens = [...parser.inlineTokens, ...parser.blockTokens]
+			.filter(token => token.type == format && token.status == TokenStatus.ACTIVE);
+		assert.equal(tokens.length, count);
+		if (validTag !== undefined) assert.ok(tokens.every(token => token.validTag == validTag));
 	});
 }
 

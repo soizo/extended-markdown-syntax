@@ -1,6 +1,10 @@
 import { ReadingModeSyntaxExtender } from "src/preview-mode/post-processor/core";
 import { configureDelimLookup } from "src/format-configs/format-utils";
 import { DEFAULT_SETTINGS } from "src/settings/configs";
+import { syntaxFixtures, editorFixtures, type SyntaxFixture } from "./syntax-fixtures";
+import { EditorParser } from "src/editor-mode/preprocessor/parser";
+import { Text } from "@codemirror/state";
+import { TokenStatus } from "src/enums";
 
 /** Run only against detached fixture DOM. Never edit a vault or install a plugin. */
 export function run() {
@@ -12,7 +16,8 @@ export function run() {
 	const settings = { ...DEFAULT_SETTINGS };
 	configureDelimLookup(settings);
 	const extender = new ReadingModeSyntaxExtender(settings);
-	const fixtures = [
+	const fixtures: SyntaxFixture[] = [
+		...syntaxFixtures,
 		{ source: String.raw`\^w\^`, selector: "sup", count: 0 },
 		{ source: String.raw`\^w\^ ^yes^`, selector: "sup", count: 1, content: "yes" },
 		{ source: String.raw`\~w\~ ~yes~`, selector: "sub", count: 1, content: "yes" },
@@ -37,7 +42,7 @@ export function run() {
 		{ source: "- \\^w\\^\n- ^yes^", selector: "sup", count: 1, content: "yes" },
 		{ source: "😀 \\^w\\^ ^yes^", selector: "sup", count: 1, content: "yes" },
 	];
-	const checks = fixtures.map(({ source, selector, count, content }) => {
+	const checks = fixtures.map(({ source, selector, count, content, text }) => {
 		let sections: { html: string, pos: { start: { line: number }, end: { line: number } } }[] = [];
 		renderer.parseSync.call({
 			text: source,
@@ -59,9 +64,25 @@ export function run() {
 		if (root.querySelector("span:not([class])"))
 			throw Error("Escape protection left a temporary span behind.");
 		const matches = root.querySelectorAll(selector);
-		if (matches.length != count || content !== undefined && matches[0]?.textContent != content)
-			throw Error(`Fixture ${JSON.stringify(source)}: expected ${count} ${selector} (${content ?? ""}), got ${root.innerHTML}`);
+		if (matches.length != count || content !== undefined && matches[0]?.textContent?.trim() != content ||
+			text !== undefined && root.textContent?.trim() != text)
+			throw Error(`Fixture ${JSON.stringify(source)}: expected ${count} ${selector} (${content ?? text ?? ""}), got ${root.innerHTML}`);
 		return source;
 	});
-	return { passed: true, checks: checks.length };
+	const cm = app.workspace.getLeavesOfType("markdown").map(leaf => leaf.view.editor?.cm).find(Boolean);
+	const context = cm?.state.values.find(value => value?.context?.parser)?.context;
+	if (!context) throw Error("Open a Markdown editor before running native editor checks.");
+	for (const { source, format, count, validTag } of editorFixtures) {
+		// New native state/context, not a transaction on any open note.
+		const state = cm.state.constructor.create({ doc: source });
+		const isolated = context.constructor.create(context.parser, state, { from: 0, to: source.length });
+		const tree = isolated.withContext(() => context.parser.parse(source));
+		const parser = new EditorParser(settings);
+		parser.initParse(Text.of(source.split("\n")), tree);
+		const tokens = [...parser.inlineTokens, ...parser.blockTokens]
+			.filter(token => token.type == format && token.status == TokenStatus.ACTIVE);
+		if (tokens.length != count || validTag !== undefined && tokens.some(token => token.validTag != validTag))
+			throw Error(`Editor fixture ${JSON.stringify(source)}: expected ${count} active tokens, got ${JSON.stringify(tokens)}`);
+	}
+	return { passed: true, checks: checks.length, editorChecks: editorFixtures.length };
 }

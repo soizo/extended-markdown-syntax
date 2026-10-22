@@ -63,6 +63,9 @@ function _drawCustomHighlight(settings: PluginSettings, targetEl: HTMLElement): 
 function _drawFencedDiv(settings: PluginSettings, targetEl: HTMLElement): void {
 	if (!(targetEl.firstChild instanceof Text && targetEl.firstChild.textContent)) return;
 
+	// A split/escaped tag is not a complete header. Only a line break or
+	// the end of the paragraph may follow its initial text node.
+	if (targetEl.firstChild.nextSibling && !(targetEl.firstChild.nextSibling instanceof HTMLBRElement)) return;
 	FENCED_DIV_RE.lastIndex = 0;
 	let baseCls = BlockRules[Format.FENCED_DIV].class,
 		textNode = targetEl.firstChild,
@@ -70,8 +73,8 @@ function _drawFencedDiv(settings: PluginSettings, targetEl: HTMLElement): void {
 		match = FENCED_DIV_RE.exec(textNode.textContent ?? "");
 
 	if (match) {
-		let tag = match[1]!,
-			clsList = _trimTag(tag).split(" ");
+		let tag = match[1],
+			clsList = _trimTag(tag).split(" ").filter(Boolean);
 		targetEl.addClass(baseCls, ...clsList);
 		if (settings.alwaysShowFencedDivTag & MarkdownViewMode.PREVIEW_MODE) return;
 		targetEl.removeChild(textNode);

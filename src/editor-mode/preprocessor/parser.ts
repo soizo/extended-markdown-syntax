@@ -8,6 +8,7 @@ import { findNode, getContextFromNode, disableEscape, findShifterAt, getShifterS
 import { EditorDelimLookup, SKIPPED_NODE_RE } from "src/editor-mode/preprocessor/parser-configs";
 import { isBlankLine, getBlockEndAt, TextCursor } from "src/editor-mode/utils/doc-utils";
 import { findTokenIndexAt, provideTokenPartsRanges } from "src/editor-mode/utils/token-utils";
+import { isEscaped } from "src/utils/escape-utils";
 
 /**
  * Used for (re)configuring the state, especially in
@@ -709,7 +710,9 @@ export class EditorParser {
 				type = EditorDelimLookup[state.char];
 
 			// Running parse on each character.
-			if (nodeType == "skipped") {
+			if (type && this.settings.editorEscape && isEscaped(state.lineStr, state.offset)) {
+				state.advance();
+			} else if (nodeType == "skipped") {
 				state.skipCursorRange();
 			} else if (nodeType == "table_sep") {
 				state.queue.resolve(Formats.ALL_INLINE, false, false);

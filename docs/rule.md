@@ -10,7 +10,7 @@ To make clear and avoid ambiguity, some rules are applied to the syntax.
 
 - Opening delimiter must not be followed by any whitespace character (regular space, tab, and new line), and the closing one must not be preceded by any whitespace character.
 - Delimiter must satisfy its requiered length as will be explained later, and must not be preceded or followed by the same character as the delimiter, or the same non-escaped if configured for that.
-- (Editor only, can be altered through the settings) Delimiter must not be escaped, if it was configured to not be escaped, by a backslash. Otherwise, it will act as literal character.
+- Backslash-escaped delimiters are literal characters. Editor escaping is enabled by default and can be disabled in settings. Reading-mode escaping requires the original Markdown section; see section 7 for limitations.
 - Formatting only occurs when opening delimiter met its closing (doesn't include highlight).
 - Content text, that is surrounded by delimiters, must at least one character.
 - Content text must not have two or more new line character.
@@ -74,19 +74,11 @@ Valid color tag will be added in the highlight classes, so `=={red}Red==` will b
 
 #### 7. NOTE: Delimiter Escaping
 
-As already explained, using escaper backslash can change the semantic meaning to that being escaped. Escaped punctuation is treated as regular character that doesn't have functional use. This applies to those delimiters when "Delimiter escaping" option is switched on.
+As already explained, using escaper backslash can change the semantic meaning to that being escaped. Escaped punctuation is treated as regular character that doesn't have functional use. In editor mode, this applies when "Delimiter escaping" option is switched on. It is enabled by default, without changing the existing settings.
 
-```
-++insertion++ \++not insertion\++ in editor mode
-```
+In preview mode, escaping also works when the original Markdown section is available. Otherwise, escaped character may still be treated as delimiter, since it has already been rendered as normal character.
 
-However, we can only apply this feature in editor mode, since escaped character being rendered as normal character without being wrapped by any tag (and it makes sense).
-
-```
-++insertion++ \++still insertion\++ \+\+still insertion\+\+, \+++not insertion+\++ in preview mode
-```
-
-Due to this condition, "Delimiter escaping" was turned of by default to maintain consistency between editor and preview mode.
+If the original and rendered text cannot be matched, the affected delimiters are treated as regular characters to avoid unintended formatting.
 
 #### 8. Modified Pandoc-style Fenced Div
 

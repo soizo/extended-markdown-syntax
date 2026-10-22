@@ -2,7 +2,7 @@ import { InlineFormat } from "src/types";
 
 export const COLOR_TAG_RE = /^\{([a-z0-9-]+)\}/i;
 export const CUSTOM_SPAN_TAG_RE = /^\{([a-z0-9 -]+)\}/i;
-export const FENCED_DIV_RE = /:{3,}(?=([a-z0-9 -]+))\1$/yi;
+export const FENCED_DIV_RE = /:{3,}([a-z0-9 -]*)$/yi;
 
 export const PreviewDelimLookup: Record<string, InlineFormat> = {}
 
