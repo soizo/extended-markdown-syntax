@@ -5,9 +5,10 @@ import { syntaxFixtures, editorFixtures, type SyntaxFixture } from "./syntax-fix
 import { EditorParser } from "src/editor-mode/preprocessor/parser";
 import { Text } from "@codemirror/state";
 import { TokenStatus } from "src/enums";
+import { checkSpoilerStyles } from "./spoiler-styles";
 
 /** Run only against detached fixture DOM. Never edit a vault or install a plugin. */
-export function run() {
+export function run(styles: string) {
 	// This private seam is test-only: use Obsidian's actual Markdown parser but
 	// supply our own receiver and source, not the open note's text or renderer.
 	const renderer = app.workspace.getLeavesOfType("markdown")[0]?.view?.previewMode?.renderer;
@@ -42,7 +43,7 @@ export function run() {
 		{ source: "- \\^w\\^\n- ^yes^", selector: "sup", count: 1, content: "yes" },
 		{ source: "😀 \\^w\\^ ^yes^", selector: "sup", count: 1, content: "yes" },
 	];
-	const checks = fixtures.map(({ source, selector, count, content, text }) => {
+	const render = (source: string): HTMLElement => {
 		let sections: { html: string, pos: { start: { line: number }, end: { line: number } } }[] = [];
 		renderer.parseSync.call({
 			text: source,
@@ -59,6 +60,10 @@ export function run() {
 			} as never);
 			root.append(el);
 		}
+		return root;
+	};
+	const checks = fixtures.map(({ source, selector, count, content, text }) => {
+		const root = render(source);
 		if (source == String.raw`\^w\^` && root.textContent != "^w^")
 			throw Error(`Issue #27 must render exactly as plain ^w^, got ${root.textContent}`);
 		if (root.querySelector("span:not([class])"))
@@ -84,5 +89,5 @@ export function run() {
 		if (tokens.length != count || validTag !== undefined && tokens.some(token => token.validTag != validTag))
 			throw Error(`Editor fixture ${JSON.stringify(source)}: expected ${count} active tokens, got ${JSON.stringify(tokens)}`);
 	}
-	return { passed: true, checks: checks.length, editorChecks: editorFixtures.length };
+	return { passed: true, checks: checks.length, editorChecks: editorFixtures.length, spoilerChecks: checkSpoilerStyles(styles, render) };
 }

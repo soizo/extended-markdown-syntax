@@ -95,6 +95,9 @@ span.spoiler {
 	}
 	&:not(.spoiler-revealed) {
 		color: transparent;
+		& * {
+			visibility: hidden;
+		}
 	}
 }
 
