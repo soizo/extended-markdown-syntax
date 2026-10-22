@@ -87,3 +87,23 @@ for (const [delimiter, , format] of inlineFormats) {
 	});
 }
 editorFixtures.push({ source: "| A |\n| --- |\n| \\|\\|w\\|\\| |", format: Format.SPOILER, count: 0 });
+
+// #24: nested blocks must not suppress the list item's own inline content.
+for (const bullet of ["-", "1."]) {
+	for (const [delimiter, selector, format] of inlineFormats) {
+		const source = `> [!note]\n> ${bullet} dsd ${delimiter}dsd${delimiter} sdsd\n> > nested ${delimiter}inner${delimiter}`;
+		syntaxFixtures.push({ source, selector, count: 2, content: "dsd" });
+		editorFixtures.push({ source, format, count: 2 });
+	}
+}
+syntaxFixtures.push(
+	{ source: "> [!note]\n> - dsd ++dsd++ sdsd", selector: "ins", count: 1, content: "dsd" },
+	{ source: "> [!note]\n> - dsd ++dsd++ sdsd\n> > dsdfsda", selector: "ins", count: 1, content: "dsd" },
+	{ source: "> [!note]\n> - dsd ++dsd++ sdsd\n>\n> > dsdfsda", selector: "ins", count: 1, content: "dsd" },
+	{ source: "> [!note]\n> - ++first++\n>\n>   > ++inner++", selector: "ins", count: 2, content: "first" },
+	{ source: "> [!note]\n> - ++first++\n> > [!tip]\n> > ++inner++", selector: "ins", count: 2, content: "first" },
+	{ source: "- ++first++\n  > ++inner++", selector: "ins", count: 2, content: "first" },
+	{ source: "> [!note]\n> - \\++literal\\++\n> > ++inner++", selector: "ins", count: 1, content: "inner" },
+	{ source: "> [!note]\n> - ++unclosed\n> > ending++", selector: "ins", count: 0 },
+	{ source: "> [!note]\n> - !!{my-class}dsd!!\n> > quoted", selector: ".custom-span.my-class", count: 1, content: "dsd" },
+);

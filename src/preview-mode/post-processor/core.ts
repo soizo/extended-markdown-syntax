@@ -83,7 +83,8 @@ function _drawFencedDiv(settings: PluginSettings, targetEl: HTMLElement): void {
 }
 
 export class ReadingModeSyntaxExtender {
-	private readonly _SELECTOR_QUERY = "p, h1, h2, h3, h4, h5, h6, td, th, li:not(:has(p)), .callout-title-inner" as const;
+	// Only a direct paragraph owns the list item's text; nested blocks are separate targets.
+	private readonly _SELECTOR_QUERY = "p, h1, h2, h3, h4, h5, h6, td, th, li:not(:has(> p)), .callout-title-inner" as const;
 	private readonly _settings: PluginSettings;
 	private _sourceText: string | null = null;
 	private _sourceLines: string[] = [];
