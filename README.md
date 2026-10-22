@@ -189,10 +189,20 @@ This plugin have been tested in the latest version of Obsidian (about 1.7.x - 1.
 
 ## 🐞 Known Issues
 
-- Delimiter escaping doesn't work in the preview mode.
+- Reading-mode delimiter escaping requires the original Markdown section. Where source is unavailable or text cannot be matched safely, see the [escaping limitations](./docs/rule.md#7-note-delimiter-escaping).
 - Cannot escape spoilers that are inside table cells (in source mode). (**cannot be fixed**)
 
 Feel free to let me know if you find any bugs...
+
+## Development
+
+```sh
+npm install
+npm test
+npm run build
+```
+
+With Obsidian running, its CLI enabled, and a Markdown note open, `npm run test:obsidian` checks the reading-mode fix against Obsidian's native Markdown output. It uses detached fixture DOM without changing notes or installing the plugin. The native-parser seam is test-only and may need updating for future Obsidian versions.
 
 ## 🙏 Acknowledgment
 
