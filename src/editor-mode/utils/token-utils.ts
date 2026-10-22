@@ -51,27 +51,26 @@ export function iterTokenGroup(spec: IterTokenGroupSpec): void {
 export function findTokenIndexAt(tokens: TokenGroup, offset: number): number | null {
 	if (!tokens.length) return null;
 
-	let base = 32768,
-		factor = 2,
+	// Find the last token that starts at or before the offset. Tokens are
+	// stored in document order, so their start offsets are sorted.
+	let low = 0,
+		high = tokens.length - 1,
 		index = 0;
 
-	while (base !== 32) {
-		if (tokens.length > base)
-			while (tokens[index].from <= offset) {
-				let end = Math.min(index + base, tokens.length);
-				if (tokens[end - 1].to < offset) index = end;
-				else break;
-			}
-
-		base /= factor;
-		factor *= 2;
+	while (low <= high) {
+		let mid = (low + high) >> 1;
+		if (tokens[mid].from <= offset) {
+			index = mid;
+			low = mid + 1;
+		} else {
+			high = mid - 1;
+		}
 	}
 
-	for (
-		let end = Math.min(index + base, tokens.length);
-		index < end && tokens[index].to < offset;
-		index++
-	);
-	
+	// Skip tokens that end before the offset, e.g. when it falls in a gap
+	// between two tokens. This must be bounded so it can never read past the
+	// end of the group (see #20).
+	while (index < tokens.length && tokens[index].to < offset) index++;
+
 	return index < tokens.length ? index : null;
 }

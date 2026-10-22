@@ -84,14 +84,18 @@ export function run(styles: string) {
 	const cm = view.editor.cm;
 	const context = cm?.state.values.find(value => value?.context?.parser)?.context;
 	if (!context) throw Error("Open a Markdown editor before running native editor checks.");
-	const parseEditor = (source: string) => {
+	const parseNative = (source: string) => {
 		// New native state/context, not a transaction on any open note.
 		const state = cm.state.constructor.create({ doc: source });
 		const normalized = state.doc.toString();
 		const isolated = context.constructor.create(context.parser, state, { from: 0, to: normalized.length });
 		const tree = isolated.withContext(() => context.parser.parse(normalized));
+		return { state, tree };
+	};
+	const parseEditor = (source: string) => {
+		const { state, tree } = parseNative(source);
 		const parser = new EditorParser(settings);
-		parser.initParse(Text.of(normalized.split("\n")), tree);
+		parser.initParse(Text.of(state.doc.toString().split("\n")), tree);
 		return { state, tree, parser };
 	};
 	for (const { source, format, count, validTag } of editorFixtures) {
@@ -101,6 +105,15 @@ export function run(styles: string) {
 		if (tokens.length != count || validTag !== undefined && tokens.some(token => token.validTag != validTag))
 			throw Error(`Editor fixture ${JSON.stringify(source)}: expected ${count} active tokens, got ${JSON.stringify(tokens)}`);
 	}
-	return { passed: true, checks: checks.length, editorChecks: editorFixtures.length,
+	// Regression for #20: editing after more than 512 custom styles must not
+	// throw while resolving the token index.
+	const manyStyles = Array.from({ length: 513 }, () => "^w^").join(" ");
+	const manyStylesParser = parseEditor(`${manyStyles}\n`).parser;
+	const editedSource = `${manyStyles} x\n`;
+	const { tree: editedTree } = parseNative(editedSource);
+	manyStylesParser.applyChange(Text.of(editedSource.split("\n")), editedTree);
+	if (manyStylesParser.inlineTokens.length != 513)
+		throw Error(`Editor regression #20: expected 513 tokens after edit, got ${manyStylesParser.inlineTokens.length}`);
+	return { passed: true, checks: checks.length, editorChecks: editorFixtures.length + 1,
 		spoilerChecks: checkSpoilerStyles(styles, render), fencedDivChecks: checkFencedDivs(cm, parseEditor) };
 }
