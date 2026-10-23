@@ -1,6 +1,6 @@
 {
 	"name": "extended-markdown-syntax",
-	"version": "2.0.11",
+	"version": "2.0.12",
 	"description": "Extend your Markdown syntax using delimiters instead of HTML tags, such as underlining, superscript, subscript, highlighting, and spoiler.",
 	"main": "main.js",
 	"scripts": {
